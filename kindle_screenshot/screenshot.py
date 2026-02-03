@@ -1,19 +1,21 @@
 """Kindleアプリのスクリーンショットを撮影するメインモジュール"""
 
-import os
 import sys
 import time
 import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
+import hashlib
+import io
 
 try:
     import pyautogui
     from PIL import Image
+    import imagehash
 except ImportError as e:
     print(f"必要なライブラリがインストールされていません: {e}")
-    print("pip install pyautogui pillow を実行してください")
+    print("pip install pyautogui pillow imagehash を実行してください")
     sys.exit(1)
 
 
@@ -112,6 +114,110 @@ class KindleScreenshot:
             raise ValueError(f"無効な方向: {direction}")
 
         time.sleep(self.delay)
+
+    def _get_image_hash(self, image: Image.Image) -> str:
+        """画像のハッシュ値を計算する（類似画像検出用）
+
+        Args:
+            image: PIL Image オブジェクト
+
+        Returns:
+            画像のperceptual hash文字列
+        """
+        return str(imagehash.phash(image))
+
+    def _images_are_similar(
+        self,
+        img1: Image.Image,
+        img2: Image.Image,
+        threshold: int = 5
+    ) -> bool:
+        """2つの画像が類似しているかを判定する
+
+        Args:
+            img1: 比較する画像1
+            img2: 比較する画像2
+            threshold: ハッシュ差分の閾値（小さいほど厳密）
+
+        Returns:
+            類似している場合True
+        """
+        hash1 = imagehash.phash(img1)
+        hash2 = imagehash.phash(img2)
+        return hash1 - hash2 < threshold
+
+    def capture_entire_book(
+        self,
+        region: Optional[Tuple[int, int, int, int]] = None,
+        max_pages: int = 10000,
+        similarity_threshold: int = 5,
+        consecutive_same_pages: int = 2,
+    ) -> list[Path]:
+        """本1冊全体を自動でキャプチャする
+
+        最後のページに達すると画面が変わらなくなることを検出して自動停止します。
+
+        Args:
+            region: キャプチャする領域
+            max_pages: 最大ページ数（安全のため）
+            similarity_threshold: 画像類似度の閾値
+            consecutive_same_pages: 同じページが連続で検出された回数で停止
+
+        Returns:
+            保存したファイルパスのリスト
+        """
+        saved_files = []
+        page_num = 1
+        same_page_count = 0
+        last_image = None
+
+        print("本1冊全体のキャプチャを開始します...")
+        print("Kindleアプリをアクティブにして、最初のページを表示してください。")
+        print("5秒後に開始します...")
+        print("（Ctrl+Cで中断できます）")
+        time.sleep(5)
+
+        try:
+            while page_num <= max_pages:
+                # スクリーンショットを撮影
+                if region:
+                    screenshot = pyautogui.screenshot(region=region)
+                else:
+                    screenshot = pyautogui.screenshot()
+
+                # 前のページと比較
+                if last_image is not None:
+                    if self._images_are_similar(
+                        last_image, screenshot, similarity_threshold
+                    ):
+                        same_page_count += 1
+                        print(f"同じページを検出 ({same_page_count}/{consecutive_same_pages})")
+
+                        if same_page_count >= consecutive_same_pages:
+                            print("\n最後のページに到達しました！")
+                            break
+                    else:
+                        same_page_count = 0
+
+                # ファイルを保存
+                filename = f"{self.prefix}_{page_num:04d}.png"
+                filepath = self.output_dir / filename
+                screenshot.save(filepath)
+                saved_files.append(filepath)
+                print(f"ページ {page_num}: {filepath}")
+
+                last_image = screenshot
+                page_num += 1
+
+                # 次のページへ
+                self.turn_page("next")
+
+        except KeyboardInterrupt:
+            print("\n\nキャプチャを中断しました")
+
+        print(f"\n完了: {len(saved_files)}ページをキャプチャしました")
+        print(f"保存先: {self.output_dir}")
+        return saved_files
 
     def capture_multiple_pages(
         self,
@@ -247,6 +353,17 @@ def main():
         action="store_true",
         help="単一のスクリーンショットを撮影",
     )
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="本1冊全体を自動でキャプチャ（最後のページを自動検出）",
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=10000,
+        help="自動キャプチャ時の最大ページ数 (デフォルト: 10000)",
+    )
 
     args = parser.parse_args()
 
@@ -258,6 +375,12 @@ def main():
 
     if args.interactive:
         kindle.interactive_capture()
+    elif args.auto:
+        region = kindle.find_kindle_window()
+        kindle.capture_entire_book(
+            region=region,
+            max_pages=args.max_pages,
+        )
     elif args.num_pages:
         print("3秒後にキャプチャを開始します。Kindleアプリをアクティブにしてください...")
         time.sleep(3)
@@ -275,6 +398,7 @@ def main():
     else:
         parser.print_help()
         print("\n例:")
+        print("  本1冊全体を自動キャプチャ: python -m kindle_screenshot --auto")
         print("  対話モード: python -m kindle_screenshot -i")
         print("  10ページ連続キャプチャ: python -m kindle_screenshot -n 10")
         print("  単一スクリーンショット: python -m kindle_screenshot --single")

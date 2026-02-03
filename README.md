@@ -4,6 +4,7 @@ Kindleアプリのスクリーンショットを撮影するPythonツールで�
 
 ## 機能
 
+- **本1冊全体の自動キャプチャ** - 最後のページを自動検出して停止
 - Kindleウィンドウの自動検出
 - 単一ページのスクリーンショット撮影
 - 複数ページの連続キャプチャ（自動ページめくり）
@@ -18,7 +19,7 @@ pip install -e .
 または依存ライブラリのみをインストール:
 
 ```bash
-pip install pyautogui pillow pygetwindow
+pip install pyautogui pillow imagehash pygetwindow
 ```
 
 ## 使い方
@@ -28,6 +29,9 @@ pip install pyautogui pillow pygetwindow
 ```bash
 # ヘルプを表示
 kindle-screenshot --help
+
+# 本1冊全体を自動でキャプチャ（おすすめ）
+kindle-screenshot --auto
 
 # 対話モードで実行
 kindle-screenshot -i
@@ -40,6 +44,9 @@ kindle-screenshot --single
 
 # 出力先を指定して5ページキャプチャ（3ページ目から開始）
 kindle-screenshot -n 5 -s 3 -o ./my_screenshots
+
+# 本を自動キャプチャして保存先を指定
+kindle-screenshot --auto -o ./my_book
 ```
 
 ### モジュールとして実行
@@ -60,6 +67,9 @@ kindle = KindleScreenshot(
     prefix="kindle"
 )
 
+# 本1冊全体を自動キャプチャ（おすすめ）
+kindle.capture_entire_book()
+
 # 単一のスクリーンショットを撮影
 kindle.take_screenshot()
 
@@ -74,6 +84,7 @@ kindle.interactive_capture()
 
 | オプション | 短縮形 | 説明 | デフォルト |
 |------------|--------|------|------------|
+| `--auto` | - | 本1冊全体を自動キャプチャ | - |
 | `--output` | `-o` | 保存先ディレクトリ | `./screenshots` |
 | `--num-pages` | `-n` | 連続キャプチャするページ数 | - |
 | `--start-page` | `-s` | 開始ページ番号 | `1` |
@@ -81,6 +92,7 @@ kindle.interactive_capture()
 | `--prefix` | `-p` | ファイル名のプレフィックス | `kindle` |
 | `--interactive` | `-i` | 対話モードで実行 | - |
 | `--single` | - | 単一のスクリーンショットを撮影 | - |
+| `--max-pages` | - | 自動キャプチャ時の最大ページ数 | `10000` |
 
 ## 対話モードのコマンド
 
