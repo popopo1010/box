@@ -1,0 +1,589 @@
+"use client"
+
+import { useState } from 'react'
+import { store } from '@/lib/store'
+import type { Role, Circle } from '@/lib/database.types'
+
+const ACCENT_COLORS = ['#7b5ea7', '#3d9e8c', '#c49a3c', '#4a9e6a', '#d4644a', '#4a7ec4']
+
+export default function CirclesPage() {
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null)
+  const [showAddCircle, setShowAddCircle] = useState(false)
+  const [showAddRole, setShowAddRole] = useState(false)
+  const [addRoleCircleId, setAddRoleCircleId] = useState('')
+
+  // Add Circle form
+  const [circleName, setCircleName] = useState('')
+  const [circlePurpose, setCirclePurpose] = useState('')
+  const [circleParent, setCircleParent] = useState('')
+
+  // Add Role form
+  const [roleName, setRoleName] = useState('')
+  const [rolePurpose, setRolePurpose] = useState('')
+  const [roleDomain, setRoleDomain] = useState('')
+  const [roleAccountabilities, setRoleAccountabilities] = useState('')
+  const [roleCircleId, setRoleCircleId] = useState('')
+
+  // Assign member state
+  const [assignMemberId, setAssignMemberId] = useState('')
+
+  // Force re-render
+  const [, setTick] = useState(0)
+  const forceUpdate = () => setTick(t => t + 1)
+
+  const circles = store.getCircles()
+  const allMembers = store.getMembers()
+
+  const handleAddCircle = () => {
+    if (!circleName.trim()) return
+    store.addCircle({
+      name: circleName.trim(),
+      purpose: circlePurpose.trim(),
+      parent_circle_id: circleParent || null,
+    })
+    setCircleName('')
+    setCirclePurpose('')
+    setCircleParent('')
+    setShowAddCircle(false)
+    forceUpdate()
+  }
+
+  const handleAddRole = () => {
+    if (!roleName.trim() || !roleCircleId) return
+    store.addRole({
+      name: roleName.trim(),
+      purpose: rolePurpose.trim(),
+      domain: roleDomain.trim(),
+      accountabilities: roleAccountabilities
+        .split('\n')
+        .map(a => a.trim())
+        .filter(Boolean),
+      circle_id: roleCircleId,
+    })
+    setRoleName('')
+    setRolePurpose('')
+    setRoleDomain('')
+    setRoleAccountabilities('')
+    setRoleCircleId('')
+    setShowAddRole(false)
+    forceUpdate()
+  }
+
+  const openAddRoleForCircle = (circleId: string) => {
+    setRoleCircleId(circleId)
+    setAddRoleCircleId(circleId)
+    setShowAddRole(true)
+  }
+
+  const handleAssign = (roleId: string) => {
+    if (!assignMemberId) return
+    store.assignRole(roleId, assignMemberId)
+    setAssignMemberId('')
+    setSelectedRole(store.getRole(roleId) || null)
+    forceUpdate()
+  }
+
+  const handleUnassign = (roleId: string, memberId: string) => {
+    store.unassignRole(roleId, memberId)
+    setSelectedRole(store.getRole(roleId) || null)
+    forceUpdate()
+  }
+
+  return (
+    <div className="min-h-screen p-6" style={{ backgroundColor: '#0f0f11' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-2xl font-bold text-white">サークル・ロール管理</h1>
+        <button
+          onClick={() => setShowAddCircle(true)}
+          className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90"
+          style={{ backgroundColor: '#7b5ea7' }}
+        >
+          サークル追加
+        </button>
+      </div>
+
+      {/* Circle Cards */}
+      <div className="space-y-6">
+        {circles.map((circle, ci) => {
+          const circleRoles = store.getRolesByCircle(circle.id)
+          const accentColor = ACCENT_COLORS[ci % ACCENT_COLORS.length]
+
+          return (
+            <div
+              key={circle.id}
+              className="rounded-xl p-5"
+              style={{
+                backgroundColor: '#1a1a1f',
+                borderLeft: `4px solid ${accentColor}`,
+                border: `1px solid #2a2a32`,
+                borderLeftWidth: '4px',
+                borderLeftColor: accentColor,
+              }}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">{circle.name}</h2>
+                  <p className="text-sm mt-1" style={{ color: '#9a9aaa' }}>
+                    {circle.purpose}
+                  </p>
+                </div>
+                <button
+                  onClick={() => openAddRoleForCircle(circle.id)}
+                  className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors hover:opacity-90"
+                  style={{ backgroundColor: '#7b5ea7', color: '#ffffff' }}
+                >
+                  ロール追加
+                </button>
+              </div>
+
+              {/* Roles within this circle */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {circleRoles.map(role => {
+                  const assignments = store.getAssignmentsForRole(role.id)
+                  const hasNoAssignments = assignments.length === 0
+
+                  return (
+                    <div
+                      key={role.id}
+                      onClick={() => setSelectedRole(role)}
+                      className="rounded-lg p-4 cursor-pointer transition-colors hover:brightness-110"
+                      style={{
+                        backgroundColor: '#22222a',
+                        border: hasNoAssignments
+                          ? '1px solid #d4644a'
+                          : '1px solid #2a2a32',
+                      }}
+                    >
+                      <h3 className="text-sm font-semibold text-white mb-1">
+                        {role.name}
+                      </h3>
+                      <p
+                        className="text-xs mb-2 line-clamp-2"
+                        style={{ color: '#8a8a9a' }}
+                      >
+                        {role.purpose}
+                      </p>
+                      {role.domain && (
+                        <p className="text-xs mb-2" style={{ color: '#6a6a7a' }}>
+                          Domain: {role.domain}
+                        </p>
+                      )}
+
+                      {/* Accountabilities */}
+                      {role.accountabilities.length > 0 && (
+                        <ul className="mb-3 space-y-0.5">
+                          {role.accountabilities.map((a, i) => (
+                            <li
+                              key={i}
+                              className="text-xs"
+                              style={{ color: '#7a7a8a' }}
+                            >
+                              - {a}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {/* Assigned Members */}
+                      <div className="flex items-center gap-1.5 mt-2">
+                        {assignments.length > 0 ? (
+                          assignments.map(a => {
+                            const member = store.getMember(a.member_id)
+                            if (!member) return null
+                            return (
+                              <div
+                                key={a.id}
+                                title={member.name}
+                                className="flex items-center justify-center rounded-full text-white font-bold shrink-0"
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  fontSize: 10,
+                                  backgroundColor: member.color,
+                                }}
+                              >
+                                {member.abbr}
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <div
+                            className="flex items-center justify-center rounded-full shrink-0"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              border: '2px solid #d4644a',
+                            }}
+                          >
+                            <span className="text-xs" style={{ color: '#d4644a' }}>
+                              --
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Role Detail Modal */}
+      {selectedRole && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+          onClick={() => setSelectedRole(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl p-6 max-h-[80vh] overflow-y-auto"
+            style={{ backgroundColor: '#1a1a1f', border: '1px solid #2a2a32' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">{selectedRole.name}</h2>
+              <button
+                onClick={() => setSelectedRole(null)}
+                className="text-sm px-2 py-1 rounded"
+                style={{ color: '#9a9aaa' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-5">
+              <div>
+                <span className="text-xs font-medium" style={{ color: '#7b5ea7' }}>
+                  Purpose
+                </span>
+                <p className="text-sm text-white mt-0.5">{selectedRole.purpose}</p>
+              </div>
+              <div>
+                <span className="text-xs font-medium" style={{ color: '#7b5ea7' }}>
+                  Domain
+                </span>
+                <p className="text-sm text-white mt-0.5">{selectedRole.domain}</p>
+              </div>
+              <div>
+                <span className="text-xs font-medium" style={{ color: '#7b5ea7' }}>
+                  Accountabilities
+                </span>
+                <ul className="mt-1 space-y-1">
+                  {selectedRole.accountabilities.map((a, i) => (
+                    <li key={i} className="text-sm text-white">
+                      - {a}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Current Assigned Members */}
+            <div className="mb-4">
+              <span className="text-xs font-medium" style={{ color: '#7b5ea7' }}>
+                Assigned Members
+              </span>
+              <div className="mt-2 space-y-2">
+                {store.getAssignmentsForRole(selectedRole.id).map(a => {
+                  const member = store.getMember(a.member_id)
+                  if (!member) return null
+                  return (
+                    <div
+                      key={a.id}
+                      className="flex items-center justify-between rounded-lg px-3 py-2"
+                      style={{ backgroundColor: '#22222a' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="flex items-center justify-center rounded-full text-white font-bold shrink-0"
+                          style={{
+                            width: 28,
+                            height: 28,
+                            fontSize: 10,
+                            backgroundColor: member.color,
+                          }}
+                        >
+                          {member.abbr}
+                        </div>
+                        <span className="text-sm text-white">{member.name}</span>
+                      </div>
+                      <button
+                        onClick={() => handleUnassign(selectedRole.id, member.id)}
+                        className="text-xs px-2 py-1 rounded"
+                        style={{ color: '#d4644a', border: '1px solid #d4644a' }}
+                      >
+                        解除
+                      </button>
+                    </div>
+                  )
+                })}
+                {store.getAssignmentsForRole(selectedRole.id).length === 0 && (
+                  <p className="text-xs" style={{ color: '#6a6a7a' }}>
+                    アサインされたメンバーはいません
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Assign Member */}
+            <div className="flex items-center gap-2 mb-4">
+              <select
+                value={assignMemberId}
+                onChange={e => setAssignMemberId(e.target.value)}
+                className="flex-1 text-sm rounded-lg px-3 py-2 text-white outline-none"
+                style={{
+                  backgroundColor: '#22222a',
+                  border: '1px solid #2a2a32',
+                }}
+              >
+                <option value="">メンバーを選択...</option>
+                {allMembers
+                  .filter(
+                    m =>
+                      !store
+                        .getAssignmentsForRole(selectedRole.id)
+                        .some(a => a.member_id === m.id)
+                  )
+                  .map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                onClick={() => handleAssign(selectedRole.id)}
+                className="px-3 py-2 rounded-lg text-xs font-medium text-white transition-colors hover:opacity-90"
+                style={{ backgroundColor: '#7b5ea7' }}
+              >
+                アサイン
+              </button>
+            </div>
+
+            {/* Edit Role Button */}
+            <button
+              className="w-full py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90"
+              style={{ border: '1px solid #7b5ea7', color: '#7b5ea7' }}
+            >
+              ロールを編集
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Circle Modal */}
+      {showAddCircle && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+          onClick={() => setShowAddCircle(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl p-6"
+            style={{ backgroundColor: '#1a1a1f', border: '1px solid #2a2a32' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-white mb-4">サークル追加</h2>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                  サークル名
+                </label>
+                <input
+                  type="text"
+                  value={circleName}
+                  onChange={e => setCircleName(e.target.value)}
+                  className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                  style={{
+                    backgroundColor: '#22222a',
+                    border: '1px solid #2a2a32',
+                  }}
+                  placeholder="例: プロダクトサークル"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                  Purpose
+                </label>
+                <input
+                  type="text"
+                  value={circlePurpose}
+                  onChange={e => setCirclePurpose(e.target.value)}
+                  className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                  style={{
+                    backgroundColor: '#22222a',
+                    border: '1px solid #2a2a32',
+                  }}
+                  placeholder="このサークルの目的"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                  親サークル
+                </label>
+                <select
+                  value={circleParent}
+                  onChange={e => setCircleParent(e.target.value)}
+                  className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                  style={{
+                    backgroundColor: '#22222a',
+                    border: '1px solid #2a2a32',
+                  }}
+                >
+                  <option value="">なし（トップレベル）</option>
+                  {circles.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setShowAddCircle(false)}
+                className="px-4 py-2 rounded-lg text-sm"
+                style={{ color: '#9a9aaa', border: '1px solid #2a2a32' }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleAddCircle}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90"
+                style={{ backgroundColor: '#7b5ea7' }}
+              >
+                追加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Role Modal */}
+      {showAddRole && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+          onClick={() => setShowAddRole(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl p-6"
+            style={{ backgroundColor: '#1a1a1f', border: '1px solid #2a2a32' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-white mb-4">ロール追加</h2>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                  ロール名
+                </label>
+                <input
+                  type="text"
+                  value={roleName}
+                  onChange={e => setRoleName(e.target.value)}
+                  className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                  style={{
+                    backgroundColor: '#22222a',
+                    border: '1px solid #2a2a32',
+                  }}
+                  placeholder="例: マーケティング担当"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                  Purpose
+                </label>
+                <input
+                  type="text"
+                  value={rolePurpose}
+                  onChange={e => setRolePurpose(e.target.value)}
+                  className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                  style={{
+                    backgroundColor: '#22222a',
+                    border: '1px solid #2a2a32',
+                  }}
+                  placeholder="このロールの目的"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                  Domain
+                </label>
+                <input
+                  type="text"
+                  value={roleDomain}
+                  onChange={e => setRoleDomain(e.target.value)}
+                  className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                  style={{
+                    backgroundColor: '#22222a',
+                    border: '1px solid #2a2a32',
+                  }}
+                  placeholder="管轄領域"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                  Accountabilities（1行に1つ）
+                </label>
+                <textarea
+                  value={roleAccountabilities}
+                  onChange={e => setRoleAccountabilities(e.target.value)}
+                  rows={4}
+                  className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none resize-none"
+                  style={{
+                    backgroundColor: '#22222a',
+                    border: '1px solid #2a2a32',
+                  }}
+                  placeholder={"責務1\n責務2\n責務3"}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                  サークル
+                </label>
+                <select
+                  value={roleCircleId}
+                  onChange={e => setRoleCircleId(e.target.value)}
+                  className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                  style={{
+                    backgroundColor: '#22222a',
+                    border: '1px solid #2a2a32',
+                  }}
+                >
+                  <option value="">サークルを選択...</option>
+                  {circles.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setShowAddRole(false)}
+                className="px-4 py-2 rounded-lg text-sm"
+                style={{ color: '#9a9aaa', border: '1px solid #2a2a32' }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleAddRole}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90"
+                style={{ backgroundColor: '#7b5ea7' }}
+              >
+                追加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
