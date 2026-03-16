@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react"
 import { store } from "@/lib/store"
-import type { Task } from "@/lib/database.types"
+import type { Task, Sprint } from "@/lib/database.types"
 
 type TaskStatus = Task["status"]
 
@@ -31,7 +31,8 @@ function statusLabel(status: string): string {
 }
 
 export default function SprintPage() {
-  const sprint = store.getActiveSprint()
+  const [activeSprint, setActiveSprint] = useState<Sprint | undefined>(() => store.getActiveSprint())
+  const sprint = activeSprint
   const members = store.getMembers()
   const roles = store.getRoles()
 
@@ -39,6 +40,13 @@ export default function SprintPage() {
     sprint ? store.getTasksBySprint(sprint.id) : []
   )
   const [showModal, setShowModal] = useState(false)
+  const [showSprintModal, setShowSprintModal] = useState(false)
+  const [newSprint, setNewSprint] = useState({
+    name: "",
+    goal: "",
+    start_date: "",
+    end_date: "",
+  })
   const [newTask, setNewTask] = useState({
     title: "",
     assignee_id: "",
@@ -46,12 +54,51 @@ export default function SprintPage() {
     status: "todo" as TaskStatus,
   })
   const [statusMenu, setStatusMenu] = useState<string | null>(null)
+  const [completedSprints, setCompletedSprints] = useState<Sprint[]>(() =>
+    store.getSprints().filter((s) => s.status === "completed")
+  )
+
+  const refreshState = useCallback(() => {
+    const newActive = store.getActiveSprint()
+    setActiveSprint(newActive)
+    if (newActive) {
+      setTasks(store.getTasksBySprint(newActive.id))
+    } else {
+      setTasks([])
+    }
+    setCompletedSprints(store.getSprints().filter((s) => s.status === "completed"))
+  }, [])
 
   const refreshTasks = useCallback(() => {
     if (sprint) {
       setTasks(store.getTasksBySprint(sprint.id))
     }
   }, [sprint])
+
+  const handleCreateSprint = useCallback(() => {
+    if (!newSprint.name.trim()) return
+    // Complete the currently active sprint first
+    const current = store.getActiveSprint()
+    if (current) {
+      store.updateSprint(current.id, { status: "completed" })
+    }
+    store.addSprint({
+      name: newSprint.name.trim(),
+      goal: newSprint.goal.trim(),
+      start_date: newSprint.start_date,
+      end_date: newSprint.end_date,
+      status: "active",
+    })
+    setNewSprint({ name: "", goal: "", start_date: "", end_date: "" })
+    setShowSprintModal(false)
+    refreshState()
+  }, [newSprint, refreshState])
+
+  const handleCompleteSprint = useCallback(() => {
+    if (!sprint) return
+    store.updateSprint(sprint.id, { status: "completed" })
+    refreshState()
+  }, [sprint, refreshState])
 
   const handleStatusChange = useCallback(
     (taskId: string, newStatus: TaskStatus) => {
@@ -104,8 +151,125 @@ export default function SprintPage() {
 
   if (!sprint) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#0f0f11", color: "#ccc" }}>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6" style={{ backgroundColor: "#0f0f11", color: "#ccc" }}>
         <p className="text-lg">アクティブなスプリントがありません</p>
+        <button
+          onClick={() => setShowSprintModal(true)}
+          className="px-5 py-2.5 rounded-lg text-sm font-medium transition-colors hover:opacity-90 cursor-pointer"
+          style={{ backgroundColor: "#7b5ea7", color: "#fff" }}
+        >
+          新規スプリント
+        </button>
+
+        {/* Sprint History when no active sprint */}
+        {completedSprints.length > 0 && (
+          <div className="w-full max-w-4xl px-6 mt-4">
+            <div className="rounded-xl p-6" style={{ backgroundColor: "#1a1a1f", border: "1px solid #2a2a32" }}>
+              <h2 className="text-lg font-bold mb-5">スプリント履歴</h2>
+              <div className="flex flex-col gap-3">
+                {completedSprints.map((cs) => {
+                  const csTasks = store.getTasksBySprint(cs.id)
+                  const csDone = csTasks.filter((t) => t.status === "done").length
+                  const csTotal = csTasks.length
+                  const csPct = csTotal > 0 ? Math.round((csDone / csTotal) * 100) : 0
+                  return (
+                    <div key={cs.id} className="rounded-lg p-4" style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32" }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium">{cs.name}</span>
+                        <span className="text-xs" style={{ color: "#8a8694" }}>
+                          {csDone}/{csTotal} 完了 ({csPct}%)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs" style={{ color: "#8a8694" }}>
+                        <span>{cs.start_date} 〜 {cs.end_date}</span>
+                        {cs.goal && <span>・{cs.goal}</span>}
+                      </div>
+                      <div className="w-full h-1.5 rounded-full mt-2" style={{ backgroundColor: "#2a2a32" }}>
+                        <div className="h-full rounded-full" style={{ width: `${csPct}%`, backgroundColor: "#4a9e6a" }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sprint Creation Modal (no-sprint state) */}
+        {showSprintModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowSprintModal(false)}>
+            <div
+              className="rounded-xl p-6 w-full max-w-md shadow-2xl"
+              style={{ backgroundColor: "#1a1a1f", border: "1px solid #2a2a32" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold mb-5">新規スプリント作成</h3>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>スプリント名 *</label>
+                  <input
+                    type="text"
+                    value={newSprint.name}
+                    onChange={(e) => setNewSprint((p) => ({ ...p, name: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                    style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                    placeholder="Sprint 2 など..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>ゴール</label>
+                  <input
+                    type="text"
+                    value={newSprint.goal}
+                    onChange={(e) => setNewSprint((p) => ({ ...p, goal: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                    style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                    placeholder="スプリントの目標..."
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>開始日</label>
+                    <input
+                      type="date"
+                      value={newSprint.start_date}
+                      onChange={(e) => setNewSprint((p) => ({ ...p, start_date: e.target.value }))}
+                      className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                      style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>終了日</label>
+                    <input
+                      type="date"
+                      value={newSprint.end_date}
+                      onChange={(e) => setNewSprint((p) => ({ ...p, end_date: e.target.value }))}
+                      className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                      style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setShowSprintModal(false)}
+                  className="px-4 py-2 rounded-lg text-sm cursor-pointer transition-colors hover:bg-white/5"
+                  style={{ color: "#8a8694" }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleCreateSprint}
+                  disabled={!newSprint.name.trim()}
+                  className="px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: "#7b5ea7", color: "#fff" }}
+                >
+                  作成
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -150,7 +314,23 @@ export default function SprintPage() {
               </span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2 min-w-[200px]">
+          <div className="flex flex-col items-end gap-3 min-w-[200px]">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSprintModal(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:opacity-90 cursor-pointer"
+                style={{ backgroundColor: "#7b5ea7", color: "#fff" }}
+              >
+                新規スプリント
+              </button>
+              <button
+                onClick={handleCompleteSprint}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:opacity-90 cursor-pointer"
+                style={{ backgroundColor: "rgba(74,158,106,0.2)", color: "#4a9e6a", border: "1px solid rgba(74,158,106,0.3)" }}
+              >
+                スプリント完了
+              </button>
+            </div>
             <span className="text-sm font-medium" style={{ color: "#8a8694" }}>
               進捗: {doneCount}/{totalCount} タスク ({progressPct}%)
             </span>
@@ -315,6 +495,114 @@ export default function SprintPage() {
       {/* Close any open menus when clicking outside */}
       {statusMenu && (
         <div className="fixed inset-0 z-40" onClick={() => setStatusMenu(null)} />
+      )}
+
+      {/* Sprint History */}
+      {completedSprints.length > 0 && (
+        <div className="rounded-xl p-6 mt-6" style={{ backgroundColor: "#1a1a1f", border: "1px solid #2a2a32" }}>
+          <h2 className="text-lg font-bold mb-5">スプリント履歴</h2>
+          <div className="flex flex-col gap-3">
+            {completedSprints.map((cs) => {
+              const csTasks = store.getTasksBySprint(cs.id)
+              const csDone = csTasks.filter((t) => t.status === "done").length
+              const csTotal = csTasks.length
+              const csPct = csTotal > 0 ? Math.round((csDone / csTotal) * 100) : 0
+              return (
+                <div key={cs.id} className="rounded-lg p-4" style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium">{cs.name}</span>
+                    <span className="text-xs" style={{ color: "#8a8694" }}>
+                      {csDone}/{csTotal} 完了 ({csPct}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs" style={{ color: "#8a8694" }}>
+                    <span>{cs.start_date} 〜 {cs.end_date}</span>
+                    {cs.goal && <span>・{cs.goal}</span>}
+                  </div>
+                  <div className="w-full h-1.5 rounded-full mt-2" style={{ backgroundColor: "#2a2a32" }}>
+                    <div className="h-full rounded-full" style={{ width: `${csPct}%`, backgroundColor: "#4a9e6a" }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Sprint Creation Modal */}
+      {showSprintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowSprintModal(false)}>
+          <div
+            className="rounded-xl p-6 w-full max-w-md shadow-2xl"
+            style={{ backgroundColor: "#1a1a1f", border: "1px solid #2a2a32" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold mb-5">新規スプリント作成</h3>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>スプリント名 *</label>
+                <input
+                  type="text"
+                  value={newSprint.name}
+                  onChange={(e) => setNewSprint((p) => ({ ...p, name: e.target.value }))}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                  style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                  placeholder="Sprint 2 など..."
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>ゴール</label>
+                <input
+                  type="text"
+                  value={newSprint.goal}
+                  onChange={(e) => setNewSprint((p) => ({ ...p, goal: e.target.value }))}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                  style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                  placeholder="スプリントの目標..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>開始日</label>
+                  <input
+                    type="date"
+                    value={newSprint.start_date}
+                    onChange={(e) => setNewSprint((p) => ({ ...p, start_date: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                    style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>終了日</label>
+                  <input
+                    type="date"
+                    value={newSprint.end_date}
+                    onChange={(e) => setNewSprint((p) => ({ ...p, end_date: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                    style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowSprintModal(false)}
+                className="px-4 py-2 rounded-lg text-sm cursor-pointer transition-colors hover:bg-white/5"
+                style={{ color: "#8a8694" }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleCreateSprint}
+                disabled={!newSprint.name.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#7b5ea7", color: "#fff" }}
+              >
+                作成
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Add Task Modal */}

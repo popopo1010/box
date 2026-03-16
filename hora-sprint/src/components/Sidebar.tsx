@@ -11,6 +11,7 @@ import {
   Users,
   Shield,
 } from "lucide-react";
+import { store } from "@/lib/store";
 
 const navItems = [
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard },
@@ -24,6 +25,41 @@ const mtgItems = [
   { href: "/mtg/tactical", label: "タクティカルMTG", icon: Users },
   { href: "/mtg/governance", label: "ガバナンスMTG", icon: Shield },
 ];
+
+function SprintWidget() {
+  const sprint = store.getActiveSprint();
+  if (!sprint) {
+    return (
+      <div className="px-4 py-4 border-t border-border">
+        <div className="text-xs text-text-muted">アクティブなスプリントなし</div>
+      </div>
+    );
+  }
+  const tasks = store.getTasksBySprint(sprint.id);
+  const done = tasks.filter((t) => t.status === "done").length;
+  const pct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
+  const end = new Date(sprint.end_date + "T23:59:59");
+  const days = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86400000));
+
+  return (
+    <div className="px-4 py-4 border-t border-border">
+      <div className="text-xs text-text-muted mb-1">現在のスプリント</div>
+      <div className="text-sm font-medium text-text mb-2 truncate">
+        {sprint.name}
+      </div>
+      <div className="w-full h-1.5 bg-border rounded-full overflow-hidden mb-1.5">
+        <div
+          className="h-full bg-accent rounded-full transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-xs text-text-muted font-mono">
+        <span>{pct}%</span>
+        <span>残り {days} 日</span>
+      </div>
+    </div>
+  );
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -90,19 +126,7 @@ export function Sidebar() {
       </nav>
 
       {/* Sprint Widget */}
-      <div className="px-4 py-4 border-t border-border">
-        <div className="text-xs text-text-muted mb-1">現在のスプリント</div>
-        <div className="text-sm font-medium text-text mb-2">
-          Sprint 12
-        </div>
-        <div className="w-full h-1.5 bg-border rounded-full overflow-hidden mb-1.5">
-          <div
-            className="h-full bg-accent rounded-full transition-all"
-            style={{ width: "65%" }}
-          />
-        </div>
-        <div className="text-xs text-text-muted font-mono">残り 5 日</div>
-      </div>
+      <SprintWidget />
     </aside>
   );
 }
