@@ -363,7 +363,8 @@ export default function TensionsPage() {
               </button>
               <button
                 onClick={handleAddTension}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
+                disabled={!formTitle.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#7b5ea7' }}
                 onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
                 onMouseLeave={e => (e.currentTarget.style.opacity = '1')}

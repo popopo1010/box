@@ -24,6 +24,14 @@ export default function CirclesPage() {
   const [roleAccountabilities, setRoleAccountabilities] = useState('')
   const [roleCircleId, setRoleCircleId] = useState('')
 
+  // Role edit mode
+  const [editMode, setEditMode] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editPurpose, setEditPurpose] = useState('')
+  const [editDomain, setEditDomain] = useState('')
+  const [editAccountabilities, setEditAccountabilities] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
   // Assign member state
   const [assignMemberId, setAssignMemberId] = useState('')
 
@@ -87,6 +95,54 @@ export default function CirclesPage() {
     store.unassignRole(roleId, memberId)
     setSelectedRole(store.getRole(roleId) || null)
     forceUpdate()
+  }
+
+  const enterEditMode = () => {
+    if (!selectedRole) return
+    setEditName(selectedRole.name)
+    setEditPurpose(selectedRole.purpose)
+    setEditDomain(selectedRole.domain)
+    setEditAccountabilities(selectedRole.accountabilities.join('\n'))
+    setEditMode(true)
+    setConfirmDelete(false)
+  }
+
+  const cancelEditMode = () => {
+    setEditMode(false)
+    setConfirmDelete(false)
+  }
+
+  const handleSaveRole = () => {
+    if (!selectedRole || !editName.trim()) return
+    const data = {
+      name: editName.trim(),
+      purpose: editPurpose.trim(),
+      domain: editDomain.trim(),
+      accountabilities: editAccountabilities
+        .split('\n')
+        .map(a => a.trim())
+        .filter(Boolean),
+    }
+    store.updateRole(selectedRole.id, data)
+    const updated = store.getRole(selectedRole.id) || null
+    setSelectedRole(updated)
+    setEditMode(false)
+    forceUpdate()
+  }
+
+  const handleDeleteRole = () => {
+    if (!selectedRole) return
+    store.deleteRole(selectedRole.id)
+    setSelectedRole(null)
+    setEditMode(false)
+    setConfirmDelete(false)
+    forceUpdate()
+  }
+
+  const closeRoleModal = () => {
+    setSelectedRole(null)
+    setEditMode(false)
+    setConfirmDelete(false)
   }
 
   return (
@@ -236,7 +292,7 @@ export default function CirclesPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
-          onClick={() => setSelectedRole(null)}
+          onClick={closeRoleModal}
         >
           <div
             className="w-full max-w-lg rounded-xl p-6 max-h-[80vh] overflow-y-auto"
@@ -244,9 +300,11 @@ export default function CirclesPage() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-4">
-              <h2 className="text-lg font-bold text-white">{selectedRole.name}</h2>
+              <h2 className="text-lg font-bold text-white">
+                {editMode ? 'ロールを編集' : selectedRole.name}
+              </h2>
               <button
-                onClick={() => setSelectedRole(null)}
+                onClick={closeRoleModal}
                 className="text-sm px-2 py-1 rounded"
                 style={{ color: '#9a9aaa' }}
               >
@@ -254,6 +312,122 @@ export default function CirclesPage() {
               </button>
             </div>
 
+            {editMode ? (
+              <div className="space-y-3 mb-5">
+                <div>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                    ロール名
+                  </label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                    style={{
+                      backgroundColor: '#22222a',
+                      border: '1px solid #2a2a32',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                    Purpose
+                  </label>
+                  <input
+                    type="text"
+                    value={editPurpose}
+                    onChange={e => setEditPurpose(e.target.value)}
+                    className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                    style={{
+                      backgroundColor: '#22222a',
+                      border: '1px solid #2a2a32',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                    Domain
+                  </label>
+                  <input
+                    type="text"
+                    value={editDomain}
+                    onChange={e => setEditDomain(e.target.value)}
+                    className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none"
+                    style={{
+                      backgroundColor: '#22222a',
+                      border: '1px solid #2a2a32',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: '#9a9aaa' }}>
+                    Accountabilities（1行に1つ）
+                  </label>
+                  <textarea
+                    value={editAccountabilities}
+                    onChange={e => setEditAccountabilities(e.target.value)}
+                    rows={4}
+                    className="w-full text-sm rounded-lg px-3 py-2 text-white outline-none resize-none"
+                    style={{
+                      backgroundColor: '#22222a',
+                      border: '1px solid #2a2a32',
+                    }}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    onClick={cancelEditMode}
+                    className="px-4 py-2 rounded-lg text-sm"
+                    style={{ color: '#9a9aaa', border: '1px solid #2a2a32' }}
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={handleSaveRole}
+                    className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90"
+                    style={{ backgroundColor: '#7b5ea7' }}
+                  >
+                    保存
+                  </button>
+                </div>
+
+                {/* Delete Role */}
+                <div className="pt-3" style={{ borderTop: '1px solid #2a2a32' }}>
+                  {confirmDelete ? (
+                    <div className="space-y-2">
+                      <p className="text-xs" style={{ color: '#d4644a' }}>
+                        本当にこのロールを削除しますか？この操作は取り消せません。
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleDeleteRole}
+                          className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90"
+                          style={{ backgroundColor: '#d4644a' }}
+                        >
+                          削除する
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete(false)}
+                          className="px-4 py-2 rounded-lg text-sm"
+                          style={{ color: '#9a9aaa', border: '1px solid #2a2a32' }}
+                        >
+                          やめる
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="w-full py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-90"
+                      style={{ border: '1px solid #d4644a', color: '#d4644a' }}
+                    >
+                      ロールを削除
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
             <div className="space-y-3 mb-5">
               <div>
                 <span className="text-xs font-medium" style={{ color: '#7b5ea7' }}>
@@ -280,7 +454,10 @@ export default function CirclesPage() {
                 </ul>
               </div>
             </div>
+            )}
 
+            {!editMode && (
+            <>
             {/* Current Assigned Members */}
             <div className="mb-4">
               <span className="text-xs font-medium" style={{ color: '#7b5ea7' }}>
@@ -364,11 +541,14 @@ export default function CirclesPage() {
 
             {/* Edit Role Button */}
             <button
-              className="w-full py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90"
+              onClick={enterEditMode}
+              className="w-full py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-90"
               style={{ border: '1px solid #7b5ea7', color: '#7b5ea7' }}
             >
               ロールを編集
             </button>
+            </>
+            )}
           </div>
         </div>
       )}
@@ -453,7 +633,8 @@ export default function CirclesPage() {
               </button>
               <button
                 onClick={handleAddCircle}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90"
+                disabled={!circleName.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#7b5ea7' }}
               >
                 追加
@@ -575,7 +756,8 @@ export default function CirclesPage() {
               </button>
               <button
                 onClick={handleAddRole}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90"
+                disabled={!roleName.trim() || !roleCircleId}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#7b5ea7' }}
               >
                 追加
