@@ -9,6 +9,7 @@ import {
   Zap,
   Timer,
   Users,
+  UserCircle,
   Shield,
 } from "lucide-react";
 import { store } from "@/lib/store";
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/orgchart", label: "組織図", icon: Network },
   { href: "/tensions", label: "テンション", icon: Zap },
   { href: "/sprint", label: "スプリント", icon: Timer },
+  { href: "/members", label: "メンバー", icon: UserCircle },
 ];
 
 const mtgItems = [

@@ -137,6 +137,23 @@ export const store = {
   // Members
   getMembers: () => [...members],
   getMember: (id: string) => members.find(m => m.id === id),
+  addMember: (data: Omit<Member, 'id' | 'created_at'>) => {
+    const member: Member = { ...data, id: genId(), created_at: new Date().toISOString() }
+    members.push(member)
+    saveData(`${LS_PREFIX}members`, members)
+    return member
+  },
+  updateMember: (id: string, data: Partial<Member>) => {
+    const idx = members.findIndex(m => m.id === id)
+    if (idx >= 0) members[idx] = { ...members[idx], ...data }
+    saveData(`${LS_PREFIX}members`, members)
+    return members[idx]
+  },
+  deleteMember: (id: string) => {
+    const idx = members.findIndex(m => m.id === id)
+    if (idx >= 0) members.splice(idx, 1)
+    saveData(`${LS_PREFIX}members`, members)
+  },
 
   // Circles
   getCircles: () => [...circles],
@@ -235,6 +252,11 @@ export const store = {
     if (idx >= 0) tensions[idx] = { ...tensions[idx], ...data }
     saveData(`${LS_PREFIX}tensions`, tensions)
     return tensions[idx]
+  },
+  deleteTension: (id: string) => {
+    const idx = tensions.findIndex(t => t.id === id)
+    if (idx >= 0) tensions.splice(idx, 1)
+    saveData(`${LS_PREFIX}tensions`, tensions)
   },
 
   // Sprints

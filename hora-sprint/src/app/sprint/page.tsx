@@ -53,7 +53,9 @@ export default function SprintPage() {
     role_id: "",
     status: "todo" as TaskStatus,
   })
-  const [statusMenu, setStatusMenu] = useState<string | null>(null)
+  const [editTask, setEditTask] = useState<Task | null>(null)
+  const [editForm, setEditForm] = useState({ title: "", assignee_id: "", role_id: "", status: "todo" as TaskStatus })
+  const [confirmDeleteTask, setConfirmDeleteTask] = useState(false)
   const [completedSprints, setCompletedSprints] = useState<Sprint[]>(() =>
     store.getSprints().filter((s) => s.status === "completed")
   )
@@ -100,15 +102,6 @@ export default function SprintPage() {
     refreshState()
   }, [sprint, refreshState])
 
-  const handleStatusChange = useCallback(
-    (taskId: string, newStatus: TaskStatus) => {
-      store.updateTask(taskId, { status: newStatus })
-      refreshTasks()
-      setStatusMenu(null)
-    },
-    [refreshTasks]
-  )
-
   const handleAddTask = useCallback(() => {
     if (!sprint || !newTask.title.trim() || !newTask.assignee_id) return
     store.addTask({
@@ -122,6 +115,45 @@ export default function SprintPage() {
     setNewTask({ title: "", assignee_id: "", role_id: "", status: "todo" })
     setShowModal(false)
   }, [sprint, newTask, refreshTasks])
+
+  const handleOpenEdit = useCallback((task: Task) => {
+    setEditTask(task)
+    setEditForm({
+      title: task.title,
+      assignee_id: task.assignee_id,
+      role_id: task.role_id ?? "",
+      status: task.status,
+    })
+    setConfirmDeleteTask(false)
+  }, [])
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editTask || !editForm.title.trim()) return
+    store.updateTask(editTask.id, {
+      title: editForm.title.trim(),
+      assignee_id: editForm.assignee_id,
+      role_id: editForm.role_id || null,
+      status: editForm.status,
+    })
+    setEditTask(null)
+    refreshTasks()
+  }, [editTask, editForm, refreshTasks])
+
+  const handleDeleteTask = useCallback(() => {
+    if (!editTask) return
+    store.deleteTask(editTask.id)
+    setEditTask(null)
+    setConfirmDeleteTask(false)
+    refreshTasks()
+  }, [editTask, refreshTasks])
+
+  const handleCycleStatus = useCallback((e: React.MouseEvent, task: Task) => {
+    e.stopPropagation()
+    const currentIdx = STATUS_CYCLE.indexOf(task.status)
+    const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length]
+    store.updateTask(task.id, { status: nextStatus })
+    refreshTasks()
+  }, [refreshTasks])
 
   const tasksByStatus = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = {
@@ -382,6 +414,7 @@ export default function SprintPage() {
                 {colTasks.map((task) => {
                   const assignee = store.getMember(task.assignee_id)
                   const role = task.role_id ? store.getRole(task.role_id) : null
+                  const statusCol = STATUS_COLUMNS.find((c) => c.key === task.status)
                   return (
                     <div
                       key={task.id}
@@ -391,9 +424,19 @@ export default function SprintPage() {
                         border: "1px solid #2a2a32",
                         boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
                       }}
-                      onClick={() => setStatusMenu(statusMenu === task.id ? null : task.id)}
+                      onClick={() => handleOpenEdit(task)}
                     >
-                      <p className="text-sm font-medium mb-2 leading-snug">{task.title}</p>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="text-sm font-medium leading-snug flex-1">{task.title}</p>
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                          style={{ backgroundColor: `${statusCol?.color ?? "#555"}22`, color: statusCol?.color ?? "#555" }}
+                          onClick={(e) => handleCycleStatus(e, task)}
+                          title="クリックでステータス変更"
+                        >
+                          {statusCol?.label}
+                        </span>
+                      </div>
                       {assignee && (
                         <div className="flex items-center gap-2 mb-1">
                           <div
@@ -411,27 +454,6 @@ export default function SprintPage() {
                         <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#2a2a32", color: "#8a8694" }}>
                           {role.name}
                         </span>
-                      )}
-
-                      {/* Status Change Dropdown */}
-                      {statusMenu === task.id && (
-                        <div
-                          className="absolute top-full left-0 mt-1 z-50 rounded-lg overflow-hidden shadow-xl"
-                          style={{ backgroundColor: "#2a2a32", border: "1px solid #3a3a42", minWidth: "140px" }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {STATUS_COLUMNS.map((s) => (
-                            <button
-                              key={s.key}
-                              className="block w-full text-left px-3 py-2 text-xs transition-colors hover:bg-white/5 cursor-pointer"
-                              style={{ color: s.key === task.status ? s.color : "#aaa" }}
-                              onClick={() => handleStatusChange(task.id, s.key)}
-                            >
-                              {s.key === task.status ? "● " : "○ "}
-                              {s.label}
-                            </button>
-                          ))}
-                        </div>
                       )}
                     </div>
                   )
@@ -492,9 +514,129 @@ export default function SprintPage() {
         </div>
       </div>
 
-      {/* Close any open menus when clicking outside */}
-      {statusMenu && (
-        <div className="fixed inset-0 z-40" onClick={() => setStatusMenu(null)} />
+      {/* Task Edit Modal */}
+      {editTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setEditTask(null); setConfirmDeleteTask(false) }}>
+          <div
+            className="rounded-xl p-6 w-full max-w-md shadow-2xl"
+            style={{ backgroundColor: "#1a1a1f", border: "1px solid #2a2a32" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold mb-5">タスク詳細</h3>
+
+            <div className="flex flex-col gap-4">
+              {/* Title */}
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>タイトル</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1"
+                  style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                  placeholder="タスクのタイトルを入力..."
+                />
+              </div>
+
+              {/* Assignee */}
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>担当者</label>
+                <select
+                  value={editForm.assignee_id}
+                  onChange={(e) => setEditForm((p) => ({ ...p, assignee_id: e.target.value }))}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 cursor-pointer"
+                  style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                >
+                  <option value="">選択してください</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Role */}
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>ロール</label>
+                <select
+                  value={editForm.role_id}
+                  onChange={(e) => setEditForm((p) => ({ ...p, role_id: e.target.value }))}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 cursor-pointer"
+                  style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                >
+                  <option value="">なし</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#8a8694" }}>ステータス</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value as TaskStatus }))}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 cursor-pointer"
+                  style={{ backgroundColor: "#22222a", border: "1px solid #2a2a32", color: "#e0e0e4" }}
+                >
+                  {STATUS_COLUMNS.map((s) => (
+                    <option key={s.key} value={s.key}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Delete Section */}
+            <div className="mt-6 pt-4" style={{ borderTop: "1px solid #2a2a32" }}>
+              {!confirmDeleteTask ? (
+                <button
+                  onClick={() => setConfirmDeleteTask(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors hover:opacity-90"
+                  style={{ backgroundColor: "rgba(212,100,74,0.15)", color: "#d4644a", border: "1px solid rgba(212,100,74,0.3)" }}
+                >
+                  タスクを削除
+                </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs" style={{ color: "#d4644a" }}>本当に削除しますか？</span>
+                  <button
+                    onClick={handleDeleteTask}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors hover:opacity-90"
+                    style={{ backgroundColor: "#d4644a", color: "#fff" }}
+                  >
+                    削除する
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteTask(false)}
+                    className="px-3 py-1.5 rounded-lg text-xs cursor-pointer transition-colors hover:bg-white/5"
+                    style={{ color: "#8a8694" }}
+                  >
+                    やめる
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => { setEditTask(null); setConfirmDeleteTask(false) }}
+                className="px-4 py-2 rounded-lg text-sm cursor-pointer transition-colors hover:bg-white/5"
+                style={{ color: "#8a8694" }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editForm.title.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#4a7ec4", color: "#fff" }}
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Sprint History */}

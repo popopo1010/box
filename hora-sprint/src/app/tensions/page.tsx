@@ -39,12 +39,19 @@ export default function TensionsPage() {
   const members = useMemo(() => store.getMembers(), [])
   const sprints = useMemo(() => store.getSprints(), [])
 
-  // Form state
+  // Form state (create modal)
   const [formTitle, setFormTitle] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formType, setFormType] = useState<Tension['type']>('tactical')
   const [formAuthorId, setFormAuthorId] = useState(members[0]?.id ?? '')
   const [formSprintId, setFormSprintId] = useState<string>('')
+
+  // Detail/edit modal state
+  const [selectedTension, setSelectedTension] = useState<Tension | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editType, setEditType] = useState<Tension['type']>('tactical')
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const filtered = useMemo(() => {
     return tensions.filter(t => {
@@ -83,6 +90,45 @@ export default function TensionsPage() {
   function handleStatusChange(id: string, newStatus: Tension['status']) {
     store.updateTension(id, { status: newStatus })
     setTensions(store.getTensions())
+    // If the detail modal is open for this tension, update it
+    if (selectedTension && selectedTension.id === id) {
+      setSelectedTension({ ...selectedTension, status: newStatus })
+    }
+  }
+
+  function openDetailModal(tension: Tension) {
+    setSelectedTension(tension)
+    setEditTitle(tension.title)
+    setEditDescription(tension.description)
+    setEditType(tension.type)
+    setConfirmDelete(false)
+  }
+
+  function closeDetailModal() {
+    setSelectedTension(null)
+    setConfirmDelete(false)
+  }
+
+  function handleSaveEdit() {
+    if (!selectedTension || !editTitle.trim()) return
+    store.updateTension(selectedTension.id, {
+      title: editTitle.trim(),
+      description: editDescription.trim(),
+      type: editType,
+    })
+    setTensions(store.getTensions())
+    closeDetailModal()
+  }
+
+  function handleDeleteTension() {
+    if (!selectedTension) return
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+    store.deleteTension(selectedTension.id)
+    setTensions(store.getTensions())
+    closeDetailModal()
   }
 
   function formatDate(iso: string) {
@@ -193,8 +239,11 @@ export default function TensionsPage() {
             return (
               <div
                 key={tension.id}
-                className="rounded-lg p-5"
+                className="rounded-lg p-5 cursor-pointer transition-colors"
                 style={{ backgroundColor: '#1a1a1f', border: '1px solid #2a2a32' }}
+                onClick={() => openDetailModal(tension)}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = '#3a3a44')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = '#2a2a32')}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -238,7 +287,7 @@ export default function TensionsPage() {
                   </div>
 
                   {/* Status change buttons */}
-                  <div className="flex flex-col gap-1 shrink-0">
+                  <div className="flex flex-col gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                     {(['unprocessed', 'processing', 'resolved'] as Tension['status'][]).map(s => (
                       <button
                         key={s}
@@ -371,6 +420,140 @@ export default function TensionsPage() {
               >
                 起票する
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detail/Edit Tension Modal */}
+      {selectedTension && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={closeDetailModal}
+          />
+          {/* Modal content */}
+          <div
+            className="relative w-full max-w-lg mx-4 rounded-xl p-6 max-h-[90vh] overflow-y-auto"
+            style={{ backgroundColor: '#1a1a1f', border: '1px solid #2a2a32' }}
+          >
+            <h2 className="text-lg font-bold text-white mb-5">テンション詳細</h2>
+
+            <div className="space-y-4">
+              {/* Title */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">タイトル</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-1"
+                  style={{ backgroundColor: '#22222a', border: '1px solid #2a2a32', '--tw-ring-color': '#7b5ea7' } as React.CSSProperties}
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">詳細</label>
+                <textarea
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none resize-none focus:ring-1"
+                  style={{ backgroundColor: '#22222a', border: '1px solid #2a2a32', '--tw-ring-color': '#7b5ea7' } as React.CSSProperties}
+                />
+              </div>
+
+              {/* Type */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">タイプ</label>
+                <select
+                  value={editType}
+                  onChange={e => setEditType(e.target.value as Tension['type'])}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none"
+                  style={{ backgroundColor: '#22222a', border: '1px solid #2a2a32' }}
+                >
+                  <option value="governance">ガバナンス</option>
+                  <option value="tactical">タクティカル</option>
+                  <option value="strategy">戦略</option>
+                </select>
+              </div>
+
+              {/* Status display + change buttons */}
+              <div>
+                <label className="block text-xs text-gray-400 mb-2">ステータス</label>
+                <div className="flex gap-2">
+                  {(['unprocessed', 'processing', 'resolved'] as Tension['status'][]).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => handleStatusChange(selectedTension.id, s)}
+                      disabled={selectedTension.status === s}
+                      className="px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-40"
+                      style={{
+                        backgroundColor: selectedTension.status === s ? statusColors[s] : '#2a2a32',
+                        color: selectedTension.status === s ? '#ffffff' : '#8a8694',
+                      }}
+                    >
+                      {statusLabels[s]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Meta info */}
+              <div className="flex items-center gap-4 text-xs text-gray-500 pt-2" style={{ borderTop: '1px solid #2a2a32' }}>
+                {(() => {
+                  const author = store.getMember(selectedTension.author_id)
+                  return author ? (
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white"
+                        style={{ backgroundColor: author.color }}
+                      >
+                        {author.abbr}
+                      </span>
+                      <span>{author.name}</span>
+                    </span>
+                  ) : null
+                })()}
+                <span>{formatDate(selectedTension.created_at)}</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between mt-6 pt-4" style={{ borderTop: '1px solid #2a2a32' }}>
+              {/* Delete button (two-step) */}
+              <button
+                onClick={handleDeleteTension}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: confirmDelete ? '#d4644a' : '#2a2a32',
+                  color: confirmDelete ? '#ffffff' : '#d4644a',
+                }}
+              >
+                {confirmDelete ? '本当に削除する' : 'テンションを削除'}
+              </button>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={closeDetailModal}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-gray-400 transition-colors"
+                  style={{ backgroundColor: '#2a2a32' }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={!editTitle.trim()}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#7b5ea7' }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                >
+                  保存
+                </button>
+              </div>
             </div>
           </div>
         </div>
