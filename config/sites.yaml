@@ -1,0 +1,116 @@
+# 求人媒体 → 法人マスター同期の設定
+#
+# `task_id` は Octoparse MCP 経由で Claude Code にタスクを作成させた後に埋める。
+# `field_map` の左辺は Octoparse のフィールド名（媒体の HTML に合わせて Octoparse で設定した名前）、
+# 右辺は Google Sheets 法人マスターのヘッダー名。
+
+sheet:
+  id: "1IhKsPixhjJqUb0fvbG4wJ18hvXTkwhTGljYJvfpx0bY"
+  gid: 1047720461
+  key_columns: ["会社名"]
+  match_columns: ["都道府県", "電話番号"]
+  max_jobs_per_company: 3
+
+sites:
+  rikunabi_next:
+    task_id: ""
+    template: "rikunabi-next-job-scraper"
+    display_name: "リクナビNEXT"
+    field_map:
+      会社名: 会社名
+      所在地: 所在地
+      都道府県: 都道府県
+      電話番号: 電話番号
+      コーポレートURL: URL
+      業種: 業種
+      従業員数: 従業員数
+      資本金: 資本金
+      設立: 設立年
+      代表者: 代表者名
+      職種: 職種_1
+
+  mynavi_tenshoku:
+    task_id: ""
+    template: "mynavi-job-scraper"
+    display_name: "マイナビ転職"
+    field_map:
+      会社名: 会社名
+      本社所在地: 所在地
+      都道府県: 都道府県
+      電話番号: 電話番号
+      URL: URL
+      事業内容: 業種
+      従業員数: 従業員数
+      資本金: 資本金
+      設立: 設立年
+      代表者: 代表者名
+      職種: 職種_1
+
+  doda:
+    task_id: ""
+    template: "doda-job-scraper"
+    display_name: "doda"
+    field_map:
+      企業名: 会社名
+      所在地: 所在地
+      都道府県: 都道府県
+      代表電話番号: 電話番号
+      URL: URL
+      業種: 業種
+      従業員数: 従業員数
+      資本金: 資本金
+      設立年月: 設立年
+      代表者名: 代表者名
+      募集職種: 職種_1
+
+  en_tenshoku:
+    task_id: ""
+    display_name: "エン転職"
+    field_map:
+      会社名: 会社名
+      所在地: 所在地
+      都道府県: 都道府県
+      電話番号: 電話番号
+      ホームページ: URL
+      事業内容: 業種
+      従業員数: 従業員数
+      資本金: 資本金
+      設立: 設立年
+      代表者: 代表者名
+      職種名: 職種_1
+
+  indeed:
+    task_id: ""
+    display_name: "Indeed"
+    field_map:
+      会社名: 会社名
+      所在地: 所在地
+      都道府県: 都道府県
+      求人URL: URL
+      職種: 職種_1
+
+  kyujinbox:
+    task_id: ""
+    display_name: "求人ボックス"
+    field_map:
+      会社名: 会社名
+      勤務地: 所在地
+      都道府県: 都道府県
+      求人URL: URL
+      職種: 職種_1
+
+  # 施工管理系専門サイト（Octoparse 標準テンプレート無し。MCP 経由で Auto-Detect タスクを作成後、task_id と field_map を埋める）
+  sekokan_no_mado:
+    task_id: ""
+    display_name: "施工の窓口"
+    field_map: {}
+
+  kenshoku_bank:
+    task_id: ""
+    display_name: "建職バンク"
+    field_map: {}
+
+  ore_no_yume:
+    task_id: ""
+    display_name: "俺の夢"
+    field_map: {}

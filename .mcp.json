@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "octoparse": {
+      "type": "http",
+      "url": "https://mcp.octoparse.com"
+    },
+    "google-sheets": {
+      "type": "http",
+      "url": "https://mcp.composio.dev/google_sheets"
+    }
+  }
+}

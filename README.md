@@ -1,4 +1,29 @@
-# Kindle Screenshot Tool
+# box
+
+このリポジトリには以下のツールが入っています。
+
+- [Kindle Screenshot Tool](#kindle-screenshot-tool) — Kindle アプリのスクリーンショット撮影
+- [求人媒体 → 法人マスター同期](#求人媒体--法人マスター同期) — Octoparse MCP + Google Sheets API で法人マスターの空欄を埋める
+
+---
+
+## 求人媒体 → 法人マスター同期
+
+求人媒体（リクナビ NEXT / マイナビ転職 / doda / エン転職 / Indeed / 求人ボックス / 施工管理系専門サイト）の公開情報を Octoparse でクローリングし、既存の Google Sheets 法人マスターの **空欄セルだけを埋める** ツール。
+
+```bash
+pip install -e .
+cp .env.example .env && $EDITOR .env        # Octoparse / Google 認証情報
+job-crawler inspect-sheet                   # マスターの列を確認
+job-crawler sync --all --dry-run            # 差分サマリだけ表示
+job-crawler sync --all                      # マスターに反映
+```
+
+詳細は [`docs/job_crawler.md`](docs/job_crawler.md)。Octoparse タスクの整備は `.mcp.json` で登録済みの Octoparse MCP サーバーを Claude Code から対話的に叩く。
+
+---
+
+## Kindle Screenshot Tool
 
 Kindleアプリのスクリーンショットを撮影するPythonツールです。
 
